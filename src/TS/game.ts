@@ -1,4 +1,15 @@
 class Paddle {
+
+    private canvasWidth: number;
+    private width: number = 75;
+    private height: number = 10;
+    private posX: number;
+    private posY: number;
+    constructor(x: number, y: number, canvasWidth: number) {
+        this.posX = x;
+        this.posY = y - this.height;
+        this.canvasWidth = canvasWidth;
+    }
     draw(context: CanvasRenderingContext2D): void {
         context.beginPath();
         context.rect(this.posX, this.posY, this.width, this.height);
@@ -23,26 +34,21 @@ class Paddle {
             this.posX = 0;
         }
     }
-    private canvasWidth: number;
-    private width: number = 75;
-    private height: number = 10;
-    private posX: number;
-    private posY: number;
-    constructor(x: number, y: number, canvasWidth: number) {
-        this.posX = x;
-        this.posY = y - this.height;
-        this.canvasWidth = canvasWidth;
+    moveX(relativeX: number) {
+        paddle.posX = relativeX - this.width / 2;
     }
+
 }
 
 class Brick {
     private offsetLeft: number = 30;
     private offsetTop: number = 30;
     private padding: number = 10;
-    private width: number = 75;
-    private height: number = 20;
-    private posX: number;
-    private posY: number;
+    width: number = 75;
+    height: number = 20;
+    posX: number;
+    posY: number;
+    removed: boolean = false;
     constructor(col: number, row: number) {
         this.posX = (col * (this.width + this.padding)) + this.offsetLeft;
         this.posY = (row * (this.height + this.padding)) + this.offsetTop;
@@ -58,6 +64,25 @@ class Brick {
 }
 
 class Ball {
+
+    private radius: number;
+    private posX: number;
+    private posY: number;
+    private canvasWidth: number;
+    private canvasHeight: number;
+    private dx: number = -2;
+    private dy: number = -2;
+    private startingPointX: number;
+    private startingPointY: number;
+    constructor(x: number, y: number, radius: number, canvasWidth: number, canvasHeight: number) {
+        this.radius = radius;
+        this.posX = x;
+        this.posY = y;
+        this.canvasWidth = canvasWidth;
+        this.canvasHeight = canvasHeight;
+        this.startingPointX = x;
+        this.startingPointY = x;
+    }
     draw(context: CanvasRenderingContext2D): void {
         context.beginPath();
         context.arc(this.posX, this.posY, this.radius, 0, Math.PI * 2);
@@ -74,29 +99,25 @@ class Ball {
         } else if (paddle.bounce(this.posX, this.posY)) {
             this.dy = - this.dy;
         } else if (this.posY > this.canvasHeight + this.radius) {
-            alert('GAME OVER');
-            document.location.reload();
-            clearInterval(interval);
+            return true;
         }
         this.posX += this.dx;
         this.posY += this.dy;
-
+        return false;
     }
-    private radius: number;
-    private posX: number;
-    private posY: number;
-    private canvasWidth: number;
-    private canvasHeight: number;
-    private dx: number = -2;
-    private dy: number = -2;
-    constructor(x: number, y: number, radius: number, canvasWidth: number, canvasHeight: number) {
-        this.radius = radius;
-        this.posX = x;
-        this.posY = y;
-        this.canvasWidth = canvasWidth;
-        this.canvasHeight = canvasHeight;
+    collision(brick: Brick): boolean {
+        if (this.posX > brick.posX && this.posX < brick.posX + brick.width && this.posY > brick.posY && this.posY < brick.posY + brick.height) {
+            this.dy = -this.dy;
+            brick.removed = true;
+            return true;
+        }
+        return false;
     }
-
+    resetPosition(): void {
+        this.posY = this.startingPointY;
+        this.posX = this.startingPointX;
+        this.dy = -2;
+    }
 }
 
 const canvas = document.getElementById('myCanvas') as HTMLCanvasElement;
@@ -104,36 +125,60 @@ const ctx: CanvasRenderingContext2D = canvas.getContext('2d')!;
 const ballRadius: number = 10;
 const brickRowCount: number = 3;
 const brickColumnCount: number = 5;
+const paddle: Paddle = new Paddle(canvas.width / 2, canvas.height - 20, canvas.width);
+const ball: Ball = new Ball(canvas.width / 2, canvas.height - 50, 10, canvas.width, canvas.height);
 
 let rightPressed: boolean;
 let leftPressed: boolean;
-let interval = setInterval(draw, 10);
 let bricks: Brick[][] = createBricks();
-const paddle: Paddle = new Paddle(canvas.width / 2, canvas.height - 20, canvas.width);
-const ball: Ball = new Ball(canvas.width / 2, canvas.height - 40, 10, canvas.width, canvas.height);
+let score: number = 0;
+let lives: number = 3;
+let countDown: boolean = false;
 document.addEventListener('keydown', keyDownHandler, false);
 document.addEventListener('keyup', keyUpHandler, false);
-
+document.addEventListener('mousemove', mouseMoveHandler, false);
+draw();
 
 function draw(): void {
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ball.draw(ctx);
+
     paddle.draw(ctx);
     drawBricks();
-    ball.move(paddle);
+    drawScore(score);
+    drawlives(lives);
+    if (!countDown) {
+        ball.draw(ctx);
+        collisionDetection();
+        if (ball.move(paddle)) {
+            lives--;
+            if (lives === 0) {
+                alert('GAME OVER');
+                document.location.reload();
+            } else {
+                countDown = true;
+                setTimeout(() => {
+                    countDown = false;
+                    ball.resetPosition();
+                }, 1500);
+            }
+        }
+    }
     if (rightPressed) {
         paddle.move(false);
     } else if (leftPressed) {
         paddle.move(true);
     }
-
+    requestAnimationFrame(draw);
 }
 
 function drawBricks(): void {
     for (var col = 0; col < brickColumnCount; col++) {
         for (var row = 0; row < brickRowCount; row++) {
             let brick = bricks[col][row];
-            brick.draw(ctx);
+            if (!brick.removed) {
+                brick.draw(ctx);
+            }
         }
     }
 }
@@ -165,3 +210,38 @@ function createBricks(): Brick[][] {
     return result;
 }
 
+function collisionDetection() {
+    for (var col = 0; col < brickColumnCount; col++) {
+        for (var row = 0; row < brickRowCount; row++) {
+            let brick: Brick = bricks[col][row];
+            if (!brick.removed) {
+                if (ball.collision(brick)) {
+                    score++;
+                    if (score == brickColumnCount * brickRowCount) {
+                        alert('YOU WIN, CONGRATULATIONS!');
+                        document.location.reload();
+                    }
+                }
+            }
+        }
+    }
+}
+
+function drawScore(score: number): void {
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#0095DD';
+    ctx.fillText(`Score: ${score}`, 8, 20);
+}
+
+function mouseMoveHandler(e: MouseEvent): void {
+    var relativeX = e.clientX - canvas.offsetLeft;
+    if (relativeX > 0 && relativeX < canvas.width) {
+        paddle.moveX(relativeX);
+    }
+}
+
+function drawlives(lives: number): void {
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#0095DD';
+    ctx.fillText(`Lives: ${lives}`, canvas.width - 65, 20);
+}
